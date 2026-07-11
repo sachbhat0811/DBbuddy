@@ -1,6 +1,6 @@
-# JusDB Dashboard
+# DBbuddy 
 
-**JusDB Dashboard** is a premium, real-time diagnostic and administrative dashboard designed specifically for MySQL databases. It acts as an all-in-one control center for Database Administrators (DBAs), DevOps Engineers, and Backend Developers to monitor database health, analyze query performance, resolve concurrency locks, explore schemas, and trigger logical backups—all from a secure, visually stunning glassmorphic web interface.
+**DBbuddy** is a premium, real-time diagnostic and administrative dashboard designed specifically for MySQL databases. It acts as an all-in-one control center for Database Administrators (DBAs), DevOps Engineers, and Backend Developers to monitor database health, analyze query performance, resolve concurrency locks, explore schemas, and trigger logical backups—all from a secure, visually stunning glassmorphic web interface.
 
 ---
 
@@ -36,8 +36,8 @@
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/yourusername/jusdb-dashboard.git
-cd jusdb-dashboard
+git clone https://github.com/yourusername/DBbuddy.git
+cd DBbuddy
 ```
 
 ### 2. Configure Environment Variables
@@ -88,7 +88,7 @@ Visit `http://localhost:5173` in your browser and log in using the `DASHBOARD_PA
 For production (e.g., AWS EC2):
 1. Build the frontend: `cd frontend && npm run build`
 2. The Node.js backend (`server.js`) is designed to natively serve the optimized React bundle from `frontend/dist`. 
-3. Run the backend continuously using a process manager like **PM2**: `pm2 start server.js --name jusdb-dashboard`
+3. Run the backend continuously using a process manager like **PM2**: `pm2 start server.js --name DBbuddy`
 4. Access the dashboard at `http://<YOUR-SERVER-IP>:5000`.
 
 ---
