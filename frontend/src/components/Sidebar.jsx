@@ -17,7 +17,7 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
     <aside className="sidebar">
       <div className="sidebar-header">
         <Database color="#6366f1" size={28} />
-        <h2>MySQL Portal</h2>
+        <h2>DBbuddy</h2>
       </div>
       <nav className="sidebar-nav">
         {menuItems.map(item => (

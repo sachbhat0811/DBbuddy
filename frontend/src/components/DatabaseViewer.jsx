@@ -12,6 +12,13 @@ const DatabaseViewer = () => {
   const [selectedTable, setSelectedTable] = useState(null);
   const [tableData, setTableData] = useState({ rows: [], columns: [] });
   const [users, setUsers] = useState([]);
+  
+  // Builder State
+  const [newDbName, setNewDbName] = useState('');
+  const [newTableName, setNewTableName] = useState('');
+  const [newTableDb, setNewTableDb] = useState('');
+  const [newColumns, setNewColumns] = useState([{ name: 'id', type: 'INT', isPrimary: true, autoIncrement: true }]);
+  const [importStatus, setImportStatus] = useState(null);
 
   useEffect(() => {
     axios.get(`${API_BASE}/dbviewer/databases`).then(res => setDatabases(res.data.data)).catch(console.error);
@@ -34,6 +41,54 @@ const DatabaseViewer = () => {
       const res = await axios.get(`${API_BASE}/dbviewer/data/${selectedDb}/${table}`);
       setTableData(res.data.data);
     } catch (err) { console.error(err); }
+  };
+
+  const handleCreateDb = async () => {
+    try {
+      await axios.post(`${API_BASE}/dbviewer/create-database`, { dbName: newDbName });
+      alert(`Database ${newDbName} created!`);
+      setNewDbName('');
+      axios.get(`${API_BASE}/dbviewer/databases`).then(res => setDatabases(res.data.data));
+    } catch (err) { alert(err.response?.data?.message || err.message); }
+  };
+
+  const handleCreateTable = async () => {
+    try {
+      await axios.post(`${API_BASE}/dbviewer/create-table`, { 
+        db: newTableDb, 
+        tableName: newTableName, 
+        columns: newColumns 
+      });
+      alert(`Table ${newTableName} created in ${newTableDb}!`);
+      setNewTableName('');
+      if (selectedDb === newTableDb) handleSelectDb(newTableDb);
+    } catch (err) { alert(err.response?.data?.message || err.message); }
+  };
+
+  const handleImportSql = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    if (!newTableDb) {
+      setImportStatus({ type: 'error', message: "Please select a database from the dropdown first!" });
+      return;
+    }
+    
+    setImportStatus({ type: 'loading', message: `Importing ${file.name}...` });
+    
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const sql = evt.target.result;
+        const res = await axios.post(`${API_BASE}/dbviewer/import-sql`, { db: newTableDb, sql });
+        setImportStatus({ type: 'success', message: res.data.message });
+        if (selectedDb === newTableDb) handleSelectDb(newTableDb);
+      } catch (err) {
+        setImportStatus({ type: 'error', message: err.response?.data?.message || err.message });
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = ''; // Reset input
   };
 
   const renderExplorer = () => {
@@ -187,17 +242,114 @@ const DatabaseViewer = () => {
     );
   };
 
+  const renderBuilder = () => {
+    return (
+      <div className="glass-panel" style={{ flex: 1, overflow: 'auto', padding: 24, display: 'flex', gap: 24 }}>
+        <div style={{ flex: 1 }}>
+          <h2 style={{ marginBottom: 16 }}>Create Database</h2>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <input type="text" className="input-field" placeholder="Database Name (e.g. app_db)" value={newDbName} onChange={e => setNewDbName(e.target.value)} />
+            <button className="btn-primary" onClick={handleCreateDb}>Create DB</button>
+          </div>
+          <p className="text-muted" style={{ marginTop: 8, fontSize: '0.9rem' }}>Creates a new schema on the AWS RDS instance.</p>
+        </div>
+        <div style={{ width: '1px', background: 'var(--border-color)' }}></div>
+        <div style={{ flex: 2 }}>
+          <h2 style={{ marginBottom: 16 }}>Create Table</h2>
+          <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+            <select className="input-field" value={newTableDb} onChange={e => setNewTableDb(e.target.value)}>
+              <option value="">Select Database...</option>
+              {databases.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
+            <input type="text" className="input-field" placeholder="Table Name" value={newTableName} onChange={e => setNewTableName(e.target.value)} />
+          </div>
+          <h4 style={{ marginBottom: 8, color: 'var(--text-muted)' }}>Columns</h4>
+          {newColumns.map((col, idx) => (
+            <div key={idx} style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
+              <input type="text" className="input-field" placeholder="Column Name" value={col.name} onChange={e => {
+                const cols = [...newColumns]; cols[idx].name = e.target.value; setNewColumns(cols);
+              }} />
+              <select className="input-field" value={col.type} onChange={e => {
+                const cols = [...newColumns]; cols[idx].type = e.target.value; setNewColumns(cols);
+              }}>
+                <option value="INT">INT</option>
+                <option value="VARCHAR(255)">VARCHAR(255)</option>
+                <option value="TEXT">TEXT</option>
+                <option value="BOOLEAN">BOOLEAN</option>
+                <option value="DATETIME">DATETIME</option>
+                <option value="FLOAT">FLOAT</option>
+              </select>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text-muted)', fontSize: '0.9rem', cursor: 'pointer' }}>
+                <input type="checkbox" checked={col.isPrimary} onChange={e => {
+                  const cols = [...newColumns]; cols[idx].isPrimary = e.target.checked; setNewColumns(cols);
+                }} /> PK
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text-muted)', fontSize: '0.9rem', cursor: 'pointer' }}>
+                <input type="checkbox" checked={col.autoIncrement} onChange={e => {
+                  const cols = [...newColumns]; cols[idx].autoIncrement = e.target.checked; setNewColumns(cols);
+                }} /> A_I
+              </label>
+              <button className="btn-secondary" style={{ padding: '4px 8px', background: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={() => {
+                const cols = newColumns.filter((_, i) => i !== idx); setNewColumns(cols);
+              }}>X</button>
+            </div>
+          ))}
+          <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
+            <button className="btn-secondary" onClick={() => setNewColumns([...newColumns, { name: '', type: 'VARCHAR(255)', isPrimary: false, autoIncrement: false }])}>+ Add Column</button>
+            <button className="btn-primary" style={{ background: 'var(--success)', borderColor: 'var(--success)' }} onClick={handleCreateTable} disabled={!newTableDb || !newTableName}>Create Table</button>
+          </div>
+
+          <div style={{ marginTop: 32, padding: 16, border: '1px dashed var(--border-color)', borderRadius: 8, background: 'rgba(0,0,0,0.1)' }}>
+            <h3 style={{ marginBottom: 8 }}>Import .sql File</h3>
+            <p className="text-muted" style={{ fontSize: '0.9rem', marginBottom: 16 }}>Upload a .sql file to automatically execute tables and insert data into the selected database.</p>
+            
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <label className="btn-secondary" style={{ cursor: !newTableDb ? 'not-allowed' : 'pointer', opacity: !newTableDb ? 0.5 : 1 }}>
+                Choose .sql File
+                <input 
+                  type="file" 
+                  accept=".sql" 
+                  onChange={handleImportSql} 
+                  disabled={!newTableDb} 
+                  style={{ display: 'none' }} 
+                />
+              </label>
+              {!newTableDb && <span style={{ color: 'var(--warning)', fontSize: '0.85rem' }}>*Select a database above first</span>}
+            </div>
+
+            {importStatus && (
+              <div style={{ 
+                marginTop: 12, 
+                padding: 12, 
+                borderRadius: 6, 
+                fontSize: '0.9rem',
+                border: importStatus.type === 'error' ? '1px solid var(--danger)' : importStatus.type === 'success' ? '1px solid var(--success)' : '1px solid var(--border-color)',
+                background: importStatus.type === 'error' ? 'rgba(239, 68, 68, 0.1)' : importStatus.type === 'success' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(255,255,255,0.05)',
+                color: importStatus.type === 'error' ? '#fca5a5' : importStatus.type === 'success' ? '#a7f3d0' : 'var(--text-muted)'
+              }}>
+                {importStatus.message}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="fade-in" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <h1 style={{ margin: 0 }}>Schema Explorer & Data Grid</h1>
         <div style={{ display: 'flex', gap: 12 }}>
           <button className={`btn-primary ${activeTab === 'explorer' ? '' : 'text-muted'}`} style={{ background: activeTab === 'explorer' ? 'var(--accent-primary)' : 'rgba(255,255,255,0.05)' }} onClick={() => setActiveTab('explorer')}>Schema Explorer</button>
+          <button className={`btn-primary ${activeTab === 'builder' ? '' : 'text-muted'}`} style={{ background: activeTab === 'builder' ? 'var(--success)' : 'rgba(255,255,255,0.05)' }} onClick={() => setActiveTab('builder')}>Schema Builder</button>
           <button className={`btn-primary ${activeTab === 'security' ? '' : 'text-muted'}`} style={{ background: activeTab === 'security' ? 'var(--danger)' : 'rgba(255,255,255,0.05)' }} onClick={() => setActiveTab('security')}>Security & Grants</button>
         </div>
       </div>
 
-      {activeTab === 'explorer' ? renderExplorer() : renderSecurity()}
+      {activeTab === 'explorer' && renderExplorer()}
+      {activeTab === 'builder' && renderBuilder()}
+      {activeTab === 'security' && renderSecurity()}
     </div>
   );
 };

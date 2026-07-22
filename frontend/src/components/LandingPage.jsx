@@ -4,9 +4,9 @@ import { ArrowRight, Activity, Zap, Shield, Database, Network, Settings } from '
 const LandingPage = ({ onLaunch }) => {
   return (
     <div className="landing-container fade-in">
-      <h1 className="hero-title">MySQL Enterprise Telemetry</h1>
+      <h1 className="hero-title">DBbuddy Observability</h1>
       <p className="hero-subtitle">
-        A comprehensive, full-stack observability portal designed for local instances. 
+        A comprehensive, full-stack observability portal designed for AWS RDS and managed databases. 
         Monitor active connections, analyze execution plans, and trigger native logical backups without third-party SaaS bloat.
       </p>
 

@@ -3,6 +3,7 @@ const router = express.Router();
 const pool = require('../config/db');
 const fs = require('fs');
 const path = require('path');
+const { GoogleGenAI } = require('@google/genai');
 
 // API: EXPLAIN Query Analyzer
 router.post('/explain', async (req, res) => {
@@ -16,13 +17,74 @@ router.post('/explain', async (req, res) => {
         
         let hasTableScan = false;
         let recommendations = [];
+        let explanation = "";
+        let optimizedQuery = null;
 
-        plan.forEach(step => {
-            if (step.type === 'ALL') {
-                hasTableScan = true;
-                recommendations.push(`Warning: Sequential Scan (type: ALL) detected on table '${step.table}'. Consider adding an index on the columns used in the WHERE or JOIN clauses to convert this to 'ref' or 'range'.`);
+        // Attempt AI Analysis if key is available
+        if (process.env.GEMINI_API_KEY) {
+            try {
+                const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+                const prompt = `You are an expert MySQL Database Administrator. Analyze the following MySQL query and its EXPLAIN execution plan.
+Query: ${query}
+EXPLAIN Plan: ${JSON.stringify(plan)}
+
+Identify any performance bottlenecks (like full table scans, missing indexes).
+Provide a structured JSON response (raw JSON only) with this exact schema:
+{
+    "hasTableScan": boolean,
+    "recommendations": ["string array of actionable indexing/optimizing recommendations"],
+    "explanation": "string explaining what the query is doing, why it is fast/slow, and overall health",
+    "optimizedQuery": "string containing a rewritten/optimized SQL query based on your recommendations, or null if no optimization is possible"
+}`;
+                let response;
+                let lastAiErr;
+                const fallbackModels = ['gemini-flash-latest', 'gemini-3.5-flash', 'gemini-3.1-flash-lite'];
+                
+                for (const modelName of fallbackModels) {
+                    try {
+                        response = await ai.models.generateContent({
+                            model: modelName,
+                            contents: prompt,
+                            config: {
+                                responseMimeType: "application/json",
+                            }
+                        });
+                        break; // If successful, exit the fallback loop
+                    } catch (err) {
+                        lastAiErr = err;
+                        console.warn(`[GEMINI] Model ${modelName} failed (${err.status || err.message}). Attempting fallback...`);
+                        // Only retry if it's a 503 (Unavailable) or 429 (Rate Limit) or 404 (Not Found)
+                        if (err.status !== 503 && err.status !== 429 && err.status !== 404) {
+                            throw err; 
+                        }
+                    }
+                }
+
+                if (!response) {
+                    throw lastAiErr; // If all models in the fallback array failed
+                }
+
+                const aiAnalysis = JSON.parse(response.text);
+                hasTableScan = aiAnalysis.hasTableScan;
+                recommendations = aiAnalysis.recommendations;
+                explanation = aiAnalysis.explanation;
+                optimizedQuery = aiAnalysis.optimizedQuery;
+            } catch (aiErr) {
+                console.error("Gemini API Error:", aiErr);
+                explanation = "AI Analysis failed. Falling back to rule-based diagnostics.";
             }
-        });
+        }
+
+        // Fallback to rule-based logic if no recommendations exist
+        if (recommendations.length === 0) {
+            plan.forEach(step => {
+                if (step.type === 'ALL') {
+                    hasTableScan = true;
+                    recommendations.push(`Warning: Sequential Scan (type: ALL) detected on table '${step.table}'. Consider adding an index on the columns used in the WHERE or JOIN clauses to convert this to 'ref' or 'range'.`);
+                }
+            });
+            if (!explanation) explanation = "Rule-based analysis completed.";
+        }
 
         res.json({
             status: 'success',
@@ -30,7 +92,9 @@ router.post('/explain', async (req, res) => {
                 plan,
                 analysis: {
                     hasTableScan,
-                    recommendations
+                    recommendations,
+                    explanation,
+                    optimizedQuery
                 }
             }
         });
@@ -44,7 +108,12 @@ router.post('/explain', async (req, res) => {
 router.get('/slow-log', async (req, res) => {
     try {
         // Force MySQL to write slow logs to the mysql.slow_log table (solves Windows EPERM file issues)
-        await pool.query("SET GLOBAL log_output = 'FILE,TABLE'");
+        // Wrapped in try/catch because managed databases like AWS RDS strip SUPER privileges.
+        try {
+            await pool.query("SET GLOBAL log_output = 'FILE,TABLE'");
+        } catch (setGlobalErr) {
+            console.warn("Could not set global log_output (this is normal on AWS RDS). Please configure it via AWS Parameter Groups if slow logs are empty.");
+        }
 
         // Query the slow_log table directly
         const [queries] = await pool.query(`

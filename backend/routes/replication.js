@@ -5,11 +5,11 @@ const pool = require('../config/db');
 // API: Replication Status
 router.get('/status', async (req, res) => {
     try {
-        let [rows] = await pool.query('SHOW REPLICA STATUS').catch(() => [[]]);
+        let [rows] = await pool.replicaPool.query('SHOW REPLICA STATUS').catch(() => [[]]);
         
         // Fallback for older MySQL versions
         if (rows.length === 0) {
-            [rows] = await pool.query('SHOW SLAVE STATUS').catch(() => [[]]);
+            [rows] = await pool.replicaPool.query('SHOW SLAVE STATUS').catch(() => [[]]);
         }
 
         if (rows.length === 0) {

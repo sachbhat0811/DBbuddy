@@ -13,12 +13,19 @@ const replicationRoutes = require('./routes/replication');
 const transactionsRoutes = require('./routes/transactions');
 const costRoutes = require('./routes/cost');
 const dbviewerRoutes = require('./routes/dbviewer');
+const awsRoutes = require('./routes/aws');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(express.json());
+
+// Global request logger
+app.use((req, res, next) => {
+    console.log(`[INCOMING] ${req.method} ${req.url}`);
+    next();
+});
 
 // API: Database Health Check
 app.get('/api/health/db', async (req, res) => {
@@ -64,6 +71,7 @@ app.use('/api/replication', authenticateToken, replicationRoutes);
 app.use('/api/transactions', authenticateToken, transactionsRoutes);
 app.use('/api/cost', authenticateToken, costRoutes);
 app.use('/api/dbviewer', authenticateToken, dbviewerRoutes);
+app.use('/api/aws', authenticateToken, awsRoutes);
 
 // Serve static React frontend in production
 app.use(express.static(path.join(__dirname, '../frontend/dist')));
