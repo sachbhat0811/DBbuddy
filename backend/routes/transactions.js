@@ -1,13 +1,12 @@
 const express = require('express');
 const router = express.Router();
-const pool = require('../config/db');
 
 const lowerKeys = (rows) => rows.map(r => Object.fromEntries(Object.entries(r).map(([k, v]) => [k.toLowerCase(), v])));
 
 // API: Active Transactions and Locks
 router.get('/active', async (req, res) => {
     try {
-        const [trxRows] = await pool.query(`
+        const [trxRows] = await req.dbPool.query(`
             SELECT 
                 trx_id, 
                 trx_state, 
@@ -20,7 +19,7 @@ router.get('/active', async (req, res) => {
             FROM information_schema.innodb_trx
         `);
 
-        const [waitRows] = await pool.query(`
+        const [waitRows] = await req.dbPool.query(`
             SELECT 
                 waiting_trx_id,
                 waiting_pid AS waiting_thread,
@@ -47,7 +46,7 @@ router.get('/active', async (req, res) => {
 // API: Global Isolation Level
 router.get('/isolation', async (req, res) => {
     try {
-        const [iso] = await pool.query("SHOW VARIABLES WHERE Variable_name IN ('transaction_isolation', 'tx_isolation')");
+        const [iso] = await req.dbPool.query("SHOW VARIABLES WHERE Variable_name IN ('transaction_isolation', 'tx_isolation')");
         res.json({
             status: 'success',
             data: iso[0] ? iso[0].Value : 'UNKNOWN'

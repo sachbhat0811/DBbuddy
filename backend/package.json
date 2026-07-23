@@ -22,6 +22,8 @@
     "isolation-forest": "^0.0.9",
     "jsonwebtoken": "^9.0.3",
     "mysql2": "^3.22.6",
-    "os-utils": "^0.0.14"
+    "os-utils": "^0.0.14",
+    "tunnel-ssh": "^5.2.0",
+    "uuid": "^14.0.1"
   }
 }

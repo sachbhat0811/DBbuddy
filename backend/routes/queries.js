@@ -1,6 +1,5 @@
 const express = require('express');
 const router = express.Router();
-const pool = require('../config/db');
 const fs = require('fs');
 const path = require('path');
 const { GoogleGenAI } = require('@google/genai');
@@ -13,7 +12,7 @@ router.post('/explain', async (req, res) => {
     }
 
     try {
-        const [plan] = await pool.query(`EXPLAIN ${query}`);
+        const [plan] = await req.dbPool.query(`EXPLAIN ${query}`);
         
         let hasTableScan = false;
         let recommendations = [];
@@ -110,13 +109,13 @@ router.get('/slow-log', async (req, res) => {
         // Force MySQL to write slow logs to the mysql.slow_log table (solves Windows EPERM file issues)
         // Wrapped in try/catch because managed databases like AWS RDS strip SUPER privileges.
         try {
-            await pool.query("SET GLOBAL log_output = 'FILE,TABLE'");
+            await req.dbPool.query("SET GLOBAL log_output = 'FILE,TABLE'");
         } catch (setGlobalErr) {
             console.warn("Could not set global log_output (this is normal on AWS RDS). Please configure it via AWS Parameter Groups if slow logs are empty.");
         }
 
         // Query the slow_log table directly
-        const [queries] = await pool.query(`
+        const [queries] = await req.dbPool.query(`
             SELECT 
                 start_time,
                 user_host,

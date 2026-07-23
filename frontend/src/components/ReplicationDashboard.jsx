@@ -1,8 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { Network, AlertTriangle, Server, ArrowRight, Database } from 'lucide-react';
+import { Network, AlertTriangle, Server, ArrowRight, Database, Activity, HardDrive, Terminal } from 'lucide-react';
 
 const API_BASE = import.meta.env.DEV ? 'http://localhost:5000/api' : '/api';
+
+const formatBytes = (bytes) => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+};
 
 const ReplicationDashboard = () => {
   const [replData, setReplData] = useState(null);
@@ -28,91 +36,126 @@ const ReplicationDashboard = () => {
     return () => clearInterval(interval);
   }, []);
 
+  const renderStandaloneWarning = () => (
+    <div style={{ marginBottom: 24, padding: 16, background: 'rgba(245, 158, 11, 0.1)', borderLeft: '4px solid var(--warning)', borderRadius: '0 8px 8px 0', display: 'flex', gap: 12, alignItems: 'center', color: '#fcd34d' }}>
+      <AlertTriangle size={24} color="var(--warning)" style={{ minWidth: 24 }}/>
+      <div>
+        <strong>Warning: {errorMsg}</strong>
+        <div style={{ fontSize: '0.85rem', marginTop: 4, color: '#d1d1d6' }}>
+          The database is currently running as a standalone node. Please connect to a Replica instance via the login page to view DBA Replication Metrics.
+        </div>
+      </div>
+    </div>
+  );
+
+  const isHealthy = replData && replData.io_running === 'Yes' && replData.sql_running === 'Yes';
+  const byteDelta = replData ? Math.max(0, replData.read_master_log_pos - replData.exec_master_log_pos) : 0;
+
   return (
     <div className="fade-in">
-      <h1>High Availability & Replication Architecture</h1>
+      <h1 style={{ marginBottom: 24 }}>DBA Replication Diagnostics</h1>
       
-      {errorMsg && (
-        <div style={{ marginBottom: 24, padding: 16, background: 'rgba(245, 158, 11, 0.1)', borderLeft: '4px solid var(--warning)', borderRadius: '0 8px 8px 0', display: 'flex', gap: 12, alignItems: 'center', color: '#fcd34d' }}>
-          <AlertTriangle size={24} color="var(--warning)" style={{ minWidth: 24 }}/>
-          <div>
-            <strong>Warning: {errorMsg}</strong>
-            <div style={{ fontSize: '0.85rem', marginTop: 4, color: '#d1d1d6' }}>
-              The database is currently running as a standalone node. Module 7 requires an active Primary-Replica topology to display metrics. Mocking is unnecessary as the API correctly identifies the standalone state.
-            </div>
-          </div>
-        </div>
-      )}
-
-      {errorMsg && (
-        <div className="glass-panel fade-in" style={{ marginTop: 24 }}>
-          <h2 style={{ marginBottom: 24 }}>Architecture Overview: MySQL Replication</h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-            <p className="text-muted" style={{ lineHeight: '1.6' }}>
-              Replication enables data from one MySQL database server (the Primary) to be copied to one or more MySQL database servers (the Replicas). This is the foundation of <strong>High Availability (HA)</strong> and <strong>Read Scaling</strong> in enterprise environments.
-            </p>
-            
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 24, padding: 32, background: 'rgba(0,0,0,0.3)', borderRadius: 12 }}>
-              <div style={{ textAlign: 'center' }}>
-                <Server size={48} color="var(--accent-primary)" style={{ marginBottom: 8 }} />
-                <div style={{ fontWeight: 600 }}>Primary Node</div>
-                <div className="badge badge-success" style={{ marginTop: 8 }}>Writes & Reads</div>
-              </div>
-              
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', color: 'var(--text-muted)' }}>
-                <div style={{ fontSize: '0.8rem', marginBottom: 4 }}>Binary Log Stream</div>
-                <ArrowRight size={32} />
-              </div>
-
-              <div style={{ textAlign: 'center' }}>
-                <Database size={48} color="var(--accent-secondary)" style={{ marginBottom: 8 }} />
-                <div style={{ fontWeight: 600 }}>Replica Node</div>
-                <div className="badge badge-warning" style={{ marginTop: 8 }}>Reads Only</div>
-              </div>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginTop: 16 }}>
-              <div style={{ background: 'rgba(255,255,255,0.02)', padding: 16, borderRadius: 8, border: '1px solid rgba(255,255,255,0.05)' }}>
-                <h4 style={{ color: '#fff', marginBottom: 8 }}>How It Works</h4>
-                <p className="text-muted" style={{ fontSize: '0.9rem', lineHeight: '1.5' }}>
-                  The Primary node writes all data changes to a local file called the <strong>Binary Log</strong>. The Replica connects to the Primary, reads this log via the <code>IO_THREAD</code>, and applies the changes locally via the <code>SQL_THREAD</code>.
-                </p>
-              </div>
-              <div style={{ background: 'rgba(255,255,255,0.02)', padding: 16, borderRadius: 8, border: '1px solid rgba(255,255,255,0.05)' }}>
-                <h4 style={{ color: '#fff', marginBottom: 8 }}>Why Use It?</h4>
-                <p className="text-muted" style={{ fontSize: '0.9rem', lineHeight: '1.5' }}>
-                  If the Primary server crashes, the Replica can be instantly promoted to take its place (Failover). Additionally, heavy analytic <code>SELECT</code> queries can be routed to the Replica so they don't slow down the Primary.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {errorMsg && renderStandaloneWarning()}
 
       {replData && (
-        <div className="dashboard-grid">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          {/* Topology Visualizer */}
           <div className="glass-panel">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-              <Network color="var(--accent-primary)" />
-              <h3 style={{ margin: 0 }}>Replication Lag</h3>
-            </div>
-            <div style={{ fontSize: '3rem', fontWeight: 700, color: replData.seconds_behind_master > 10 ? 'var(--warning)' : 'var(--success)' }}>
-              {replData.seconds_behind_master} <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>seconds</span>
+            <h3 style={{ marginBottom: 24 }}>Live Topology State</h3>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 32, padding: 16 }}>
+              <div style={{ textAlign: 'center', background: 'rgba(0,0,0,0.2)', padding: '24px 48px', borderRadius: 12, border: '1px solid rgba(255,255,255,0.05)' }}>
+                <Server size={48} color="var(--accent-primary)" style={{ marginBottom: 12 }} />
+                <div style={{ fontWeight: 600, fontSize: '1.2rem' }}>Primary</div>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: 4 }}>{replData.master_host}</div>
+              </div>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', color: isHealthy ? 'var(--success)' : 'var(--danger)' }}>
+                <div style={{ fontSize: '0.85rem', marginBottom: 8, fontWeight: 'bold' }}>{isHealthy ? 'Connected & Streaming' : 'Connection Broken'}</div>
+                <ArrowRight size={48} className={isHealthy ? 'pulse-animation' : ''} />
+              </div>
+
+              <div style={{ textAlign: 'center', background: 'rgba(0,0,0,0.2)', padding: '24px 48px', borderRadius: 12, border: '1px solid rgba(255,255,255,0.05)' }}>
+                <Database size={48} color="var(--accent-secondary)" style={{ marginBottom: 12 }} />
+                <div style={{ fontWeight: 600, fontSize: '1.2rem' }}>Replica Node</div>
+                <div className={`badge ${isHealthy ? 'badge-success' : 'badge-danger'}`} style={{ marginTop: 8 }}>
+                  {isHealthy ? 'Synchronizing' : 'Failing'}
+                </div>
+              </div>
             </div>
           </div>
-          
-          <div className="glass-panel">
-             <h3>Thread Health</h3>
-             <ul style={{ listStyle: 'none', marginTop: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <li style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 8, borderBottom: '1px solid var(--border-color)' }}>
-                    <span>Slave_IO_Running:</span>
-                    <span className={replData.io_running === 'Yes' ? 'badge badge-success' : 'badge badge-danger'}>{replData.io_running}</span>
-                </li>
-                <li style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 8, borderBottom: '1px solid var(--border-color)' }}>
-                    <span>Slave_SQL_Running:</span>
-                    <span className={replData.sql_running === 'Yes' ? 'badge badge-success' : 'badge badge-danger'}>{replData.sql_running}</span>
-                </li>
-             </ul>
+
+          <div className="dashboard-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+            {/* Lag Telemetry */}
+            <div className="glass-panel" style={{ gridColumn: 'span 2' }}>
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 24 }}><Activity size={18} className="text-primary"/> Lag Telemetry</h3>
+              <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center', textAlign: 'center' }}>
+                <div>
+                  <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: 8 }}>Time Delay</div>
+                  <div style={{ fontSize: '3rem', fontWeight: 700, color: replData.seconds_behind_master > 10 ? 'var(--warning)' : 'var(--success)' }}>
+                    {replData.seconds_behind_master} <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>sec</span>
+                  </div>
+                </div>
+                <div style={{ width: 1, height: 60, background: 'var(--border-color)' }}></div>
+                <div>
+                  <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: 8 }}>Byte Delta (Read - Exec)</div>
+                  <div style={{ fontSize: '2.5rem', fontWeight: 600, color: byteDelta > 1000000 ? 'var(--warning)' : 'white' }}>
+                    {formatBytes(byteDelta)}
+                  </div>
+                </div>
+                <div style={{ width: 1, height: 60, background: 'var(--border-color)' }}></div>
+                <div>
+                  <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: 8 }}>Relay Log Space</div>
+                  <div style={{ fontSize: '2.5rem', fontWeight: 600, color: 'white' }}>
+                    {formatBytes(replData.relay_log_space)}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Thread Health */}
+            <div className="glass-panel">
+               <h3 style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 24 }}><HardDrive size={18} className="text-secondary"/> Thread Health</h3>
+               <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <li style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>IO Thread:</span>
+                      <span className={replData.io_running === 'Yes' ? 'badge badge-success' : 'badge badge-danger'}>{replData.io_running}</span>
+                  </li>
+                  <li style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>SQL Thread:</span>
+                      <span className={replData.sql_running === 'Yes' ? 'badge badge-success' : 'badge badge-danger'}>{replData.sql_running}</span>
+                  </li>
+                  <li style={{ marginTop: 8, paddingTop: 16, borderTop: '1px solid var(--border-color)' }}>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: 4 }}>Current IO State</div>
+                      <div style={{ fontSize: '0.95rem', fontWeight: 500, color: 'var(--accent-primary)', wordBreak: 'break-word' }}>{replData.io_state}</div>
+                  </li>
+               </ul>
+            </div>
+          </div>
+
+          {/* Error Console */}
+          <div className="glass-panel" style={{ padding: 0, overflow: 'hidden' }}>
+            <div style={{ padding: '16px 24px', background: 'rgba(0,0,0,0.5)', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Terminal size={18} color="var(--danger)" />
+              <h3 style={{ margin: 0, fontSize: '1rem' }}>Replication Error Logs</h3>
+            </div>
+            <div style={{ padding: 24, background: '#0a0a0a', fontFamily: 'monospace', fontSize: '0.9rem', color: '#a3a3a3', minHeight: 120 }}>
+              {(!replData.last_sql_error && !replData.last_io_error) ? (
+                <div style={{ color: '#4ade80' }}>$ No recent replication errors found. System is healthy.</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {replData.last_io_error && (
+                    <div>
+                      <span style={{ color: '#ef4444' }}>[IO_ERROR]</span> {replData.last_io_error}
+                    </div>
+                  )}
+                  {replData.last_sql_error && (
+                    <div>
+                      <span style={{ color: '#ef4444' }}>[SQL_ERROR]</span> {replData.last_sql_error}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

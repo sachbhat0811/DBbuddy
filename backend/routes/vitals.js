@@ -1,18 +1,17 @@
 const express = require('express');
 const router = express.Router();
-const pool = require('../config/db');
 const os = require('os');
 const osUtils = require('os-utils');
 
 // API: Throughput & Uptime (QPS baseline)
 router.get('/throughput', async (req, res) => {
     try {
-        const [queriesStatus] = await pool.query("SHOW GLOBAL STATUS LIKE 'Queries'");
-        const [uptimeStatus] = await pool.query("SHOW GLOBAL STATUS LIKE 'Uptime'");
-        const [threadsConn] = await pool.query("SHOW GLOBAL STATUS LIKE 'Threads_connected'");
-        const [threadsRun] = await pool.query("SHOW GLOBAL STATUS LIKE 'Threads_running'");
-        const [bytesRecv] = await pool.query("SHOW GLOBAL STATUS LIKE 'Bytes_received'");
-        const [bytesSent] = await pool.query("SHOW GLOBAL STATUS LIKE 'Bytes_sent'");
+        const [queriesStatus] = await req.dbPool.query("SHOW GLOBAL STATUS LIKE 'Queries'");
+        const [uptimeStatus] = await req.dbPool.query("SHOW GLOBAL STATUS LIKE 'Uptime'");
+        const [threadsConn] = await req.dbPool.query("SHOW GLOBAL STATUS LIKE 'Threads_connected'");
+        const [threadsRun] = await req.dbPool.query("SHOW GLOBAL STATUS LIKE 'Threads_running'");
+        const [bytesRecv] = await req.dbPool.query("SHOW GLOBAL STATUS LIKE 'Bytes_received'");
+        const [bytesSent] = await req.dbPool.query("SHOW GLOBAL STATUS LIKE 'Bytes_sent'");
         
         res.json({
             status: 'success',
@@ -34,12 +33,12 @@ router.get('/throughput', async (req, res) => {
 // API: InnoDB Buffer Pool Health
 router.get('/memory', async (req, res) => {
     try {
-        const [poolData] = await pool.query("SHOW GLOBAL STATUS LIKE 'Innodb_buffer_pool_pages_data'");
-        const [poolFree] = await pool.query("SHOW GLOBAL STATUS LIKE 'Innodb_buffer_pool_pages_free'");
-        const [poolTotal] = await pool.query("SHOW GLOBAL STATUS LIKE 'Innodb_buffer_pool_pages_total'");
+        const [poolData] = await req.dbPool.query("SHOW GLOBAL STATUS LIKE 'Innodb_buffer_pool_pages_data'");
+        const [poolFree] = await req.dbPool.query("SHOW GLOBAL STATUS LIKE 'Innodb_buffer_pool_pages_free'");
+        const [poolTotal] = await req.dbPool.query("SHOW GLOBAL STATUS LIKE 'Innodb_buffer_pool_pages_total'");
         
-        const [reads] = await pool.query("SHOW GLOBAL STATUS LIKE 'Innodb_buffer_pool_reads'");
-        const [requests] = await pool.query("SHOW GLOBAL STATUS LIKE 'Innodb_buffer_pool_read_requests'");
+        const [reads] = await req.dbPool.query("SHOW GLOBAL STATUS LIKE 'Innodb_buffer_pool_reads'");
+        const [requests] = await req.dbPool.query("SHOW GLOBAL STATUS LIKE 'Innodb_buffer_pool_read_requests'");
 
         let hitRatio = 100;
         const r = parseInt(reads[0].Value, 10);
@@ -66,9 +65,9 @@ router.get('/memory', async (req, res) => {
 // API: MySQL Variables Configuration
 router.get('/config', async (req, res) => {
     try {
-        const [maxConnections] = await pool.query("SHOW VARIABLES LIKE 'max_connections'");
-        const [bufferPoolSize] = await pool.query("SHOW VARIABLES LIKE 'innodb_buffer_pool_size'");
-        const [logError] = await pool.query("SHOW VARIABLES LIKE 'log_error'");
+        const [maxConnections] = await req.dbPool.query("SHOW VARIABLES LIKE 'max_connections'");
+        const [bufferPoolSize] = await req.dbPool.query("SHOW VARIABLES LIKE 'innodb_buffer_pool_size'");
+        const [logError] = await req.dbPool.query("SHOW VARIABLES LIKE 'log_error'");
 
         res.json({
             status: 'success',

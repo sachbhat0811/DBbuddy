@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const pool = require('./config/db');
+const ConnectionManager = require('./utils/ConnectionManager');
 const jwt = require('jsonwebtoken');
 const path = require('path');
 // Import routes
@@ -39,13 +39,15 @@ app.get('/api/health/db', async (req, res) => {
 });
 
 // Authentication Route
-app.post('/api/auth/login', (req, res) => {
-    const { password } = req.body;
-    if (password === process.env.DASHBOARD_PASSWORD) {
-        const token = jwt.sign({ authenticated: true }, process.env.JWT_SECRET, { expiresIn: '12h' });
+app.post('/api/auth/login', async (req, res) => {
+    try {
+        const config = req.body;
+        const sessionId = await ConnectionManager.createConnection(config);
+        const token = jwt.sign({ sessionId, authenticated: true }, process.env.JWT_SECRET || 'fallback_secret', { expiresIn: '12h' });
         res.json({ status: 'success', token });
-    } else {
-        res.status(401).json({ status: 'error', message: 'Invalid password' });
+    } catch (error) {
+        console.error('Login Error:', error);
+        res.status(401).json({ status: 'error', message: error.message || 'Connection failed' });
     }
 });
 
@@ -55,10 +57,17 @@ const authenticateToken = (req, res, next) => {
     const token = authHeader && authHeader.split(' ')[1];
     if (!token) return res.status(401).json({ status: 'error', message: 'Unauthorized' });
 
-    jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+    jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret', (err, user) => {
         if (err) return res.status(403).json({ status: 'error', message: 'Forbidden' });
-        req.user = user;
-        next();
+        
+        try {
+            req.dbPool = ConnectionManager.getPool(user.sessionId);
+            req.dbConfig = ConnectionManager.getConfig(user.sessionId);
+            req.user = user;
+            next();
+        } catch (poolError) {
+            return res.status(401).json({ status: 'error', message: 'Session expired. Please log in again.' });
+        }
     });
 };
 

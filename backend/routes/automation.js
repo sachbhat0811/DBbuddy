@@ -8,7 +8,8 @@ const zlib = require('zlib');
 // API: Trigger mysqldump logical backup
 router.post('/backup', (req, res) => {
     const { database, structureOnly, singleTransaction, compress } = req.body;
-    const dbTarget = database || process.env.DB_NAME;
+    const config = req.dbConfig;
+    const dbTarget = database || config.dbName;
     
     // Create backups directory if not exists
     const backupsDir = path.join(__dirname, '../backups');
@@ -23,7 +24,7 @@ router.post('/backup', (req, res) => {
     const finalFilepath = path.join(backupsDir, finalFilename);
 
     // Build mysqldump command dynamically
-    let command = `mysqldump -h ${process.env.DB_HOST} -P ${process.env.DB_PORT} -u ${process.env.DB_USER} ${process.env.DB_PASSWORD ? `-p"${process.env.DB_PASSWORD}"` : ''}`;
+    let command = `mysqldump -h ${config.dbHost} -P ${config.dbPort} -u ${config.dbUser} ${config.dbPassword ? `-p"${config.dbPassword}"` : ''}`;
     
     if (singleTransaction) command += ' --single-transaction';
     if (structureOnly) command += ' --no-data';

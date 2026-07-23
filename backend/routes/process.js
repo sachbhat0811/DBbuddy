@@ -1,6 +1,5 @@
 const express = require('express');
 const router = express.Router();
-const pool = require('../config/db');
 
 // API: Poll SHOW FULL PROCESSLIST and traffic guardrails
 router.get('/list', async (req, res) => {
@@ -8,7 +7,7 @@ router.get('/list', async (req, res) => {
     
     const queryWithTimeout = (sql) => {
         return Promise.race([
-            pool.query(sql),
+            req.dbPool.query(sql),
             new Promise((_, reject) => setTimeout(() => reject(new Error(`Timeout executing: ${sql}`)), 5000))
         ]);
     };
@@ -65,7 +64,7 @@ router.post('/kill/:id', async (req, res) => {
     }
 
     try {
-        await pool.query(`KILL ${threadId}`);
+        await req.dbPool.query(`KILL ${threadId}`);
         res.json({ status: 'success', message: `Thread ${threadId} killed successfully.` });
     } catch (error) {
         console.error(`Kill Thread Error (${threadId}):`, error);

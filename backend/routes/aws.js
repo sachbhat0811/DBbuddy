@@ -7,6 +7,14 @@ const { GoogleGenAI } = require("@google/genai");
 // In-memory cache to prevent spamming the Gemini API on every dashboard poll for the same time bucket
 let anomalyCache = { timestamp: null, result: null };
 
+// Demo Mode Flag
+global.demoAnomalySpike = false;
+
+router.get('/trigger-demo-anomaly', (req, res) => {
+    global.demoAnomalySpike = true;
+    res.json({ message: 'Demo anomaly spike injected. The next CloudWatch poll will trigger the Z-Score engine.' });
+});
+
 // Initialize AWS Clients dynamically per request to ensure .env updates take effect without restart
 const getClients = () => {
     const config = {
@@ -120,6 +128,15 @@ router.get('/metrics', async (req, res) => {
 
         const metrics = Object.keys(timeMap).sort().map(k => timeMap[k]);
         
+        // DEMO MODE INJECTION
+        if (global.demoAnomalySpike && metrics.length > 0) {
+            metrics[metrics.length - 1].cpu = 98.5;
+            metrics[metrics.length - 1].connections = 145;
+            metrics[metrics.length - 1].readIops = 1500;
+            global.demoAnomalySpike = false; // Reset after one injection
+            anomalyCache = { timestamp: null, result: null }; // Clear cache to force AI re-eval
+        }
+
         let anomalyResult = null;
         if (metrics.length > 5) {
             const latestTimestamp = metrics[metrics.length - 1].time;

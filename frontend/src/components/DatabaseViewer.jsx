@@ -12,6 +12,7 @@ const DatabaseViewer = () => {
   const [selectedTable, setSelectedTable] = useState(null);
   const [tableData, setTableData] = useState({ rows: [], columns: [] });
   const [users, setUsers] = useState([]);
+  const [selectedUser, setSelectedUser] = useState(null);
   
   // Builder State
   const [newDbName, setNewDbName] = useState('');
@@ -214,6 +215,8 @@ const DatabaseViewer = () => {
               <tr>
                 <th>User</th>
                 <th>Host</th>
+                <th>Security Profile</th>
+                <th>Risk</th>
                 <th>Select</th>
                 <th>Insert</th>
                 <th>Update</th>
@@ -224,9 +227,26 @@ const DatabaseViewer = () => {
             </thead>
             <tbody>
               {users.map((u, idx) => (
-                <tr key={idx}>
+                <tr 
+                  key={idx}
+                  onClick={() => setSelectedUser(u)}
+                  style={{ 
+                    cursor: 'pointer', 
+                    background: selectedUser?.User === u.User && selectedUser?.Host === u.Host ? 'rgba(99, 102, 241, 0.1)' : 'transparent'
+                  }}
+                >
                   <td style={{ fontWeight: 600 }}>{u.User}</td>
                   <td>{u.Host}</td>
+                  <td><span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{u.profile?.description || 'Standard Account'}</span></td>
+                  <td>
+                    <span className="badge" style={{ 
+                      background: u.profile?.riskLevel === 'High' ? 'rgba(239, 68, 68, 0.2)' : u.profile?.riskLevel === 'Medium' ? 'rgba(245, 158, 11, 0.2)' : 'rgba(16, 185, 129, 0.2)',
+                      color: u.profile?.riskLevel === 'High' ? '#ef4444' : u.profile?.riskLevel === 'Medium' ? '#f59e0b' : '#10b981',
+                      border: '1px solid currentColor'
+                    }}>
+                      {u.profile?.riskLevel || 'Low'}
+                    </span>
+                  </td>
                   <td><span className={`badge ${u.Select_priv === 'Y' ? 'badge-success' : 'badge-danger'}`}>{u.Select_priv}</span></td>
                   <td><span className={`badge ${u.Insert_priv === 'Y' ? 'badge-success' : 'badge-danger'}`}>{u.Insert_priv}</span></td>
                   <td><span className={`badge ${u.Update_priv === 'Y' ? 'badge-success' : 'badge-danger'}`}>{u.Update_priv}</span></td>
@@ -238,6 +258,27 @@ const DatabaseViewer = () => {
             </tbody>
           </table>
         </div>
+
+        {selectedUser && (
+          <div className="fade-in" style={{ marginTop: 24, padding: 24, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-color)', borderRadius: 8 }}>
+            <h3 style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+              Detailed Security Analysis: <span style={{ color: 'var(--accent-primary)' }}>{selectedUser.User}@{selectedUser.Host}</span>
+            </h3>
+            <div style={{ display: 'flex', gap: 16, marginBottom: 16 }}>
+              <span className="badge" style={{ 
+                background: selectedUser.profile?.riskLevel === 'High' ? 'rgba(239, 68, 68, 0.2)' : selectedUser.profile?.riskLevel === 'Medium' ? 'rgba(245, 158, 11, 0.2)' : 'rgba(16, 185, 129, 0.2)',
+                color: selectedUser.profile?.riskLevel === 'High' ? '#ef4444' : selectedUser.profile?.riskLevel === 'Medium' ? '#f59e0b' : '#10b981',
+                border: '1px solid currentColor',
+                fontSize: '0.9rem', padding: '6px 12px'
+              }}>
+                {selectedUser.profile?.riskLevel || 'Low'} Risk
+              </span>
+            </div>
+            <p style={{ color: '#e5e7eb', lineHeight: '1.6', fontSize: '1rem', background: 'rgba(255,255,255,0.02)', padding: 16, borderRadius: 6, borderLeft: '4px solid var(--accent-secondary)' }}>
+              {selectedUser.profile?.detailedExplanation || 'No detailed explanation available for this account.'}
+            </p>
+          </div>
+        )}
       </div>
     );
   };
